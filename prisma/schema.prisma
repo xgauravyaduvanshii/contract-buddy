@@ -96,6 +96,9 @@ model User {
   projects      Project[]
   attachments   Attachment[]
   contracts     Contract[]
+  proposals     Proposal[]
+  docTemplates  DocTemplate[]
+  builderProfile BuilderProfile?
   threads       ChatThread[]
   messages      ChatMessage[]
   notifications Notification[]
@@ -159,6 +162,7 @@ model Project {
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   attachments Attachment[]
   contracts   Contract[]
+  proposals   Proposal[]
   threads     ChatThread[]
 
   @@index([userId])
@@ -190,6 +194,14 @@ model Contract {
   client    String?
   body      Json?
   status    ContractStatus @default(DRAFT)
+  clauses   Json?
+  fees      Json?
+  chat      Json?
+  suggestions Json?
+  jurisdiction String?    @default("India")
+  signature Json?
+  signedAt  DateTime?
+  proposalId String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -197,6 +209,75 @@ model Contract {
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ── Proposal builder ─────────────────────────────────────────
+model Proposal {
+  id          String   @id @default(cuid())
+  userId      String
+  projectId   String?
+  title       String
+  clientName  String?
+  projectName String?
+  logoUrl     String?
+  note        String?
+  noteAuthor  String?
+  status      String   @default("DRAFT") // DRAFT | SENT | VIEWED | ACCEPTED | SIGNED
+  currency    String   @default("INR")
+  fee         Json?    // { structure, baseFee, gstPct }
+  sections    Json     @default("[]") // [{id,title,kind,content,items[]}]
+  offers      Json?    // [{id,title,desc,price,strike,discountPct}]
+  terms       Json?    // string[]
+  style       Json?    // {font,titleColor,background,accent}
+  code        String?  // human ref e.g. CB-P-2026-001
+  validUntil  DateTime?
+  templateKey String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── Document templates (seeded globals + user-created) ───────
+model DocTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  userId      String? // null = global seed template
+  kind        String // PROPOSAL | CONTRACT
+  badge       String? // CUSTOM SCOPED | MILESTONE-BASED | RETAINER | FIXED PACKAGE
+  name        String
+  description String?
+  priceHint   String?
+  tone        String   @default("brand") // badge dot color key
+  tags        Json? // string[]
+  sections    Json     @default("[]") // proposal section presets / contract clause presets
+  fee         Json? // { structure, baseFee }
+  terms       Json? // string[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([kind])
+  @@index([userId])
+}
+
+// ── Contract-builder onboarding profile (one per user) ───────
+model BuilderProfile {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  niches       Json? // string[]
+  pricingModel String? // FIXED | MILESTONE | RETAINER
+  terms        Json? // { revisionRounds, revisionDays, extraRevisionFee, terminationFee, ipTransfer, latePenalty, feedbackWindow }
+  business     Json? // { city, pan, gstin, upi, bankAccount, ifsc }
+  onboardedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ── Chat ─────────────────────────────────────────────────────

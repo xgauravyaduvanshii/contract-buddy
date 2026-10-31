@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Home, FolderKanban, Settings, Plus, FileSignature, LogOut, ShieldCheck, MessageSquare,
-  Star, Pencil, Archive, Trash2, Undo2, ChevronsLeft, ChevronsRight,
+  Star, Pencil, Archive, Trash2, Undo2, ChevronsLeft, ChevronsRight, FilePlus2, ScrollText,
+  LayoutTemplate, ChevronDown,
 } from "lucide-react";
 import { apiGet, apiSend } from "@/lib/client";
 
@@ -18,12 +19,23 @@ const NAV = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 
+const BUILDERS = [
+  { href: "/dashboard/proposals", label: "Proposal Builder", icon: FilePlus2 },
+  { href: "/dashboard/contracts", label: "Contract Builder", icon: ScrollText },
+];
+
+const TEMPLATE_SUBS = [
+  { href: "/dashboard/templates?kind=proposal", label: "Proposal Templates", kind: "proposal" },
+  { href: "/dashboard/templates?kind=contract", label: "Contract Templates", kind: "contract" },
+];
+
 export function Sidebar({ user }: { user: User }) {
   const router = useRouter();
   const pathname = usePathname();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [open, setOpen] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(true);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [deleted, setDeleted] = useState<Thread | null>(null);
@@ -32,6 +44,7 @@ export function Sidebar({ user }: { user: User }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed(localStorage.getItem("cb_sidebar_collapsed") === "1");
     setOpen(localStorage.getItem("cb_sidebar_recent") !== "0");
+    setTemplatesOpen(localStorage.getItem("cb_sidebar_templates") !== "0");
   }, []);
 
   useEffect(() => {
@@ -55,6 +68,13 @@ export function Sidebar({ user }: { user: User }) {
     setOpen((o) => {
       localStorage.setItem("cb_sidebar_recent", o ? "0" : "1");
       return !o;
+    });
+  }
+
+  function toggleTemplates() {
+    setTemplatesOpen((t) => {
+      localStorage.setItem("cb_sidebar_templates", t ? "0" : "1");
+      return !t;
     });
   }
 
@@ -120,6 +140,27 @@ export function Sidebar({ user }: { user: User }) {
                 <n.icon className="h-4 w-4" />
               </Link>
             ))}
+            {BUILDERS.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                title={n.label}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                  active(n.href) ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                }`}
+              >
+                <n.icon className="h-4 w-4" />
+              </Link>
+            ))}
+            <Link
+              href="/dashboard/templates"
+              title="Templates"
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                active("/dashboard/templates") ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+              }`}
+            >
+              <LayoutTemplate className="h-4 w-4" />
+            </Link>
           </nav>
           <button onClick={toggleCollapse} title="Expand" className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200">
             <ChevronsRight className="h-4 w-4" />
@@ -176,6 +217,41 @@ export function Sidebar({ user }: { user: User }) {
               <n.icon className="h-4 w-4" /> {n.label}
             </Link>
           ))}
+          {BUILDERS.map((n) => (
+            <Link
+              key={n.href}
+              href={n.href}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+                active(n.href)
+                  ? "bg-zinc-800 text-white"
+                  : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+              }`}
+            >
+              <n.icon className="h-4 w-4" /> {n.label}
+            </Link>
+          ))}
+          <button
+            onClick={toggleTemplates}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
+              active("/dashboard/templates") ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+            }`}
+          >
+            <LayoutTemplate className="h-4 w-4" /> Templates
+            <ChevronDown className={`ml-auto h-3.5 w-3.5 text-zinc-500 transition ${templatesOpen ? "rotate-180" : ""}`} />
+          </button>
+          {templatesOpen && (
+            <div className="ml-4 space-y-0.5 border-l border-zinc-800 pl-3">
+              {TEMPLATE_SUBS.map((s) => (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-600" /> {s.label}
+                </Link>
+              ))}
+            </div>
+          )}
         </nav>
 
         <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-zinc-800 pt-3">
