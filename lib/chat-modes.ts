@@ -4,7 +4,7 @@ import { chatCompletion, type ChatMessage } from "./xrouter";
 export type Mode = "ASK" | "PLAN" | "AGENT" | "EXPERT" | "AUTO";
 
 // A fast, broadly-available default used for routing/classification.
-export const ROUTER_MODEL = "gemini/gemini-2.5-flash";
+export const ROUTER_MODEL = "ag/gemini-3.8-flash-tiered";
 
 export const MODE_LABELS: Record<Mode, string> = {
   ASK: "Ask",

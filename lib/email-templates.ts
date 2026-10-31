@@ -129,6 +129,22 @@ export const DEFAULT_TEMPLATES: TemplateDef[] = [
     text: "Your ContractBuddy reset code is {{otp}}. It expires in 15 minutes.",
   },
   {
+    key: "email_change_otp",
+    name: "Email Change OTP",
+    category: "Account",
+    subject: "Confirm your new ContractBuddy email — {{otp}}",
+    html: renderLayout({
+      preheader: "Verify this email address to continue the change request.",
+      title: "Confirm your new email",
+      subtitle: "Enter this code to verify {{email}}. It expires in 15 minutes. An admin then approves the change.",
+      bodyHtml:
+        `<p style="text-align:center;margin:8px 0 4px"><span style="font-size:40px;letter-spacing:10px;font-weight:800;color:${RED};font-family:monospace">{{otp}}</span></p>` +
+        "<p style='text-align:center;color:#6b7280'>If you didn't request this, ignore this email — your current address stays active.</p>",
+      footerNote: "For your security, this code can be used only once.",
+    }),
+    text: "Confirm your new email {{email}} with code {{otp}}. It expires in 15 minutes.",
+  },
+  {
     key: "password_changed",
     name: "Password Changed",
     category: "Authentication",

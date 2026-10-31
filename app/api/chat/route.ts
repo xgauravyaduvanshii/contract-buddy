@@ -12,9 +12,10 @@ import {
 } from "@/lib/chat-modes";
 import { buildContext } from "@/lib/chat-context";
 import { runTurnMeta } from "@/lib/chat-meta";
+import { autoMemorize, getMemoryContext } from "@/lib/memories";
 import { getEnabledModels } from "@/lib/settings";
 
-const DEFAULT_MODEL = "gemini/gemini-2.5-flash";
+const DEFAULT_MODEL = "ag/gemini-3.8-flash-tiered";
 
 type ToolReq = {
   webSearch?: boolean;
@@ -102,7 +103,9 @@ export async function POST(req: NextRequest) {
     toolLog.push({ tool: "error", detail: (e as Error).message.slice(0, 120) });
   }
 
-  const effectiveContext = [ctx.context, toolContext.join("\n\n")].filter(Boolean).join("\n\n");
+  const effectiveContext = [ctx.context, toolContext.join("\n\n"), await getMemoryContext(user.id)]
+    .filter(Boolean)
+    .join("\n\n");
 
   // ── Resolve AUTO → concrete mode ────────────────────────────
   let resolvedMode: Mode = mode;
@@ -213,6 +216,9 @@ export async function POST(req: NextRequest) {
     answer: content,
     userMessageId: userMsg.id,
   });
+
+  // ── Auto memory extraction from this turn (respects the user's toggle) ─
+  await autoMemorize({ userId: user.id, question: message, answer: content });
 
   return ok({
     threadId: thread.id,

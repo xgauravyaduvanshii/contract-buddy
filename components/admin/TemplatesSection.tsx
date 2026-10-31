@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mail, RotateCcw, Save } from "lucide-react";
+import { Mail, RotateCcw, Save, Send } from "lucide-react";
 import { apiGet, apiSend } from "@/lib/client";
 
 type Template = { key: string; name: string; category: string; subject: string; html: string; text: string | null; customized: boolean };
@@ -12,6 +12,10 @@ export function TemplatesSection() {
   const [draft, setDraft] = useState<Template | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testMode, setTestMode] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     apiGet<{ templates: Template[] }>("/api/admin/templates").then((r) => {
@@ -55,6 +59,15 @@ export function TemplatesSection() {
     setBusy(false);
   }
 
+  async function sendTest() {
+    if (!draft || !testTo.includes("@")) return;
+    setTesting(true);
+    setTestMsg(null);
+    const r = await apiSend<{ sent: boolean }>(`/api/admin/templates/${draft.key}/test`, "POST", { to: testTo });
+    setTesting(false);
+    setTestMsg(r.ok ? `Test email sent to ${testTo} — check the inbox (${draft.name}).` : r.error || "Send failed");
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
       <div className="space-y-4">
@@ -88,6 +101,12 @@ export function TemplatesSection() {
               <p className="text-xs text-zinc-500">Supports {"{{variables}}"} like {"{{name}}, {{otp}}"}</p>
             </div>
             <div className="flex gap-2">
+              <button
+                onClick={() => { setTestMode((v) => !v); setTestMsg(null); }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
+              >
+                <Send className="h-3.5 w-3.5" /> Test this mail
+              </button>
               <button onClick={reset} disabled={busy} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-brand-500/50">
                 <RotateCcw className="h-3.5 w-3.5" /> Reset
               </button>
@@ -96,6 +115,22 @@ export function TemplatesSection() {
               </button>
             </div>
           </div>
+
+          {testMode && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <input
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value.trim())}
+                type="email"
+                placeholder="recipient@email.com"
+                className="h-10 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-emerald-500"
+              />
+              <button onClick={sendTest} disabled={testing || !testTo.includes("@")} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                <Send className="h-3.5 w-3.5" /> {testing ? "Sending…" : "Send test"}
+              </button>
+            </div>
+          )}
+          {testMsg && <p className="mb-3 text-sm text-emerald-300">{testMsg}</p>}
 
           <label className="block">
             <span className="text-sm text-zinc-300">Subject</span>

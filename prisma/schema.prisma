@@ -25,6 +25,7 @@ enum AuthProvider {
 enum OtpPurpose {
   PASSWORD_RESET
   EMAIL_VERIFY
+  EMAIL_CHANGE
 }
 
 enum NoticeKind {
@@ -77,11 +78,15 @@ model User {
   email         String        @unique
   name          String?
   image         String?
+  bio           String?
+  links         Json?
   passwordHash  String?
   role          Role          @default(USER)
   provider      AuthProvider  @default(CREDENTIALS)
   emailVerified Boolean       @default(false)
   suspended     Boolean       @default(false)
+  memoryAutoGen Boolean       @default(true)
+  memoryRetrieval Boolean     @default(true)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -96,6 +101,8 @@ model User {
   notifications Notification[]
   skills        UserSkill[]
   designSystems DesignSystem[]
+  memories      Memory[]
+  emailChanges  EmailChangeRequest[]
 }
 
 model Session {
@@ -230,6 +237,44 @@ model ChatMessage {
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([threadId])
+}
+
+// ── AI memories & email-change approvals ────────────────────
+model Memory {
+  id        String   @id @default(cuid())
+  userId    String
+  kind      String   @default("NOTE") // PROFILE | PREFERENCE | PROJECT | FEEDBACK | NOTE
+  title     String
+  body      String
+  source    String   @default("USER") // USER | AUTO
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum EmailChangeStatus {
+  PENDING
+  VERIFIED
+  APPROVED
+  REJECTED
+}
+
+model EmailChangeRequest {
+  id        String            @id @default(cuid())
+  userId    String
+  newEmail  String
+  otpHash   String?
+  expiresAt DateTime?
+  status    EmailChangeStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
 }
 
 // ── Notifications & notices ──────────────────────────────────

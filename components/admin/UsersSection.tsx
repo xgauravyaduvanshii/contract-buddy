@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Search, X, ShieldCheck, Ban, Check } from "lucide-react";
+import { Search, X, ShieldCheck, Ban, Check, MailPlus, Trash2 } from "lucide-react";
 import { apiGet, apiSend } from "@/lib/client";
 
 type AdminUser = {
@@ -16,11 +16,18 @@ type AdminUser = {
   _count: { projects: number; threads: number; contracts: number };
 };
 
+type EmailChange = { id: string; newEmail: string; status: string; updatedAt: string; user: { id: string; email: string; name: string | null } };
+type Profile = { name: string; image: string; bio: string; links: { label: string; url: string }[] };
+type LinkItem = { label: string; url: string };
+
 export function UsersSection() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [changes, setChanges] = useState<EmailChange[]>([]);
+  const [prof, setProf] = useState<Profile | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -34,14 +41,77 @@ export function UsersSection() {
     return () => clearTimeout(t);
   }, [load]);
 
-  async function patch(id: string, data: Partial<AdminUser>) {
+  const loadChanges = useCallback(() => {
+    apiGet<{ requests: EmailChange[] }>("/api/admin/email-changes").then((r) => r.ok && r.data && setChanges(r.data.requests));
+  }, []);
+  useEffect(() => {
+    loadChanges();
+  }, [loadChanges]);
+
+  async function patch(id: string, data: Record<string, unknown>) {
+    setBusy(true);
     await apiSend<{ user: AdminUser }>(`/api/admin/users/${id}`, "PATCH", data);
     setSelected(null);
+    setProf(null);
+    setBusy(false);
+    load();
+  }
+
+  async function openManage(u: AdminUser) {
+    setSelected(u);
+    setProf(null);
+    const r = await apiGet<{ user: { name: string | null; image: string | null; bio: string | null; links: unknown } }>(`/api/admin/users/${u.id}`);
+    if (r.ok && r.data) {
+      setProf({
+        name: r.data.user.name || "",
+        image: r.data.user.image || "",
+        bio: r.data.user.bio || "",
+        links: Array.isArray(r.data.user.links) ? (r.data.user.links as LinkItem[]) : [],
+      });
+    }
+  }
+
+  async function decide(c: EmailChange, approve: boolean) {
+    setBusy(true);
+    const r = await apiSend<{ status: string }>(`/api/admin/email-changes/${c.id}`, "POST", { approve });
+    setBusy(false);
+    if (!r.ok) alert(r.error || "Failed");
+    loadChanges();
     load();
   }
 
   return (
     <div>
+      {changes.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-brand-500/30 bg-brand-600/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <MailPlus className="h-4 w-4 text-brand-300" />
+            <h3 className="text-sm font-semibold text-zinc-100">Email change requests ({changes.length})</h3>
+          </div>
+          <div className="space-y-2">
+            {changes.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm">
+                <span className="text-zinc-200">{c.user.name || c.user.email}</span>
+                <span className="text-xs text-zinc-500">{c.user.email}</span>
+                <span className="text-xs text-zinc-400">→</span>
+                <span className="text-brand-300">{c.newEmail}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${c.status === "VERIFIED" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                  {c.status === "VERIFIED" ? "OTP verified" : "OTP pending"}
+                </span>
+                <div className="ml-auto flex gap-2">
+                  <button onClick={() => decide(c, true)} disabled={busy || c.status !== "VERIFIED"} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40" title={c.status !== "VERIFIED" ? "User must verify the OTP first" : ""}>
+                    <Check className="h-3.5 w-3.5" /> Approve
+                  </button>
+                  <button onClick={() => decide(c, false)} disabled={busy} className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40">
+                    <Trash2 className="h-3.5 w-3.5" /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 px-4">
         <Search className="h-4 w-4 text-zinc-500" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by email or name…" className="h-11 flex-1 bg-transparent text-sm text-zinc-100 outline-none" />
@@ -80,7 +150,7 @@ export function UsersSection() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => setSelected(u)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-brand-500/50 hover:text-brand-300">
+                  <button onClick={() => openManage(u)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-brand-500/50 hover:text-brand-300">
                     Manage
                   </button>
                 </td>
@@ -113,10 +183,32 @@ export function UsersSection() {
               </Row>
             </div>
 
+            {prof && (
+              <div className="mt-4 space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Profile</p>
+                <input value={prof.name} onChange={(e) => setProf({ ...prof, name: e.target.value })} placeholder="Name" className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-brand-500" />
+                <input value={prof.image} onChange={(e) => setProf({ ...prof, image: e.target.value })} placeholder="Image URL (/uploads/… or https://…)" className="h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none focus:border-brand-500" />
+                <textarea value={prof.bio} onChange={(e) => setProf({ ...prof, bio: e.target.value })} rows={2} maxLength={400} placeholder="Description" className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-brand-500" />
+                {prof.links.map((l, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input value={l.label} onChange={(e) => setProf({ ...prof, links: prof.links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} placeholder="Label" className="h-9 w-28 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus:border-brand-500" />
+                    <input value={l.url} onChange={(e) => setProf({ ...prof, links: prof.links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)) })} placeholder="https://…" className="h-9 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 outline-none focus:border-brand-500" />
+                    <button onClick={() => setProf({ ...prof, links: prof.links.filter((_, j) => j !== i) })} className="text-zinc-600 hover:text-brand-400"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setProf({ ...prof, links: [...prof.links, { label: "", url: "" }] })} className="text-xs text-zinc-400 hover:text-brand-300">+ Add link</button>
+              </div>
+            )}
+
             <div className="mt-6 flex flex-wrap gap-2">
-              <button onClick={() => patch(selected.id, { role: selected.role })} className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+              <button onClick={() => patch(selected.id, { role: selected.role })} className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50" disabled={busy}>
                 <Check className="h-4 w-4" /> Save role
               </button>
+              {prof && (
+                <button onClick={() => patch(selected.id, { name: prof.name, image: prof.image, bio: prof.bio, links: prof.links })} disabled={busy} className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-brand-500/50 disabled:opacity-50">
+                  <Check className="h-4 w-4" /> Save profile
+                </button>
+              )}
               {selected.suspended ? (
                 <button onClick={() => patch(selected.id, { suspended: false })} className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 px-4 py-2 text-sm text-emerald-400 hover:bg-emerald-500/10">
                   <Check className="h-4 w-4" /> Reactivate

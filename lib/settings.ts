@@ -7,7 +7,17 @@ export const SETTINGS_KEYS = {
   apiKey: "xrouter_api_key",
   enabledModels: "enabled_models", // string[] — when null/absent, all models are allowed
   baseUrl: "xrouter_base_url",
+  smtp: "smtp_config", // { host, port, secure, user, pass, from } — partial override of env
 } as const;
+
+export type SmtpOverride = Partial<{
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+}>;
 
 async function getSetting<T>(key: string): Promise<T | null> {
   const row = await db.appSetting.findUnique({ where: { key } });
@@ -51,6 +61,32 @@ export async function getAllSettings() {
     apiKeyPreview: maskKey(await getApiKey()),
     baseUrl: await getBaseUrl(),
     enabledModels: await getEnabledModels(),
+    smtpOverride: Boolean(await getSmtpOverride()),
+  };
+}
+
+/** Admin-managed SMTP override (merged over the env defaults). */
+export async function getSmtpOverride(): Promise<SmtpOverride | null> {
+  return getSetting<SmtpOverride>(SETTINGS_KEYS.smtp);
+}
+
+export async function setSmtpOverride(value: SmtpOverride | null) {
+  if (value) await setSetting(SETTINGS_KEYS.smtp, value);
+  else await db.appSetting.deleteMany({ where: { key: SETTINGS_KEYS.smtp } });
+}
+
+/** Effective SMTP config: env defaults + admin override. */
+export async function getSmtpConfig() {
+  const o = (await getSmtpOverride()) || {};
+  const port = o.port ?? env.smtp.port;
+  return {
+    host: o.host || env.smtp.host,
+    port,
+    // Port 465 always speaks implicit TLS — derive it when not explicitly set.
+    secure: o.secure ?? (env.smtp.secure || port === 465),
+    user: o.user || env.smtp.user,
+    pass: o.pass || env.smtp.pass,
+    from: o.from || env.smtp.from,
   };
 }
 

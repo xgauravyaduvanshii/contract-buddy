@@ -5,10 +5,11 @@ import { ok, fail } from "@/lib/api";
 import { chatCompletion, type ChatMessage as XRMsg } from "@/lib/xrouter";
 import { type Mode, ROUTER_MODEL, systemPrompt } from "@/lib/chat-modes";
 import { runTurnMeta } from "@/lib/chat-meta";
+import { getMemoryContext } from "@/lib/memories";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const DEFAULT_MODEL = "gemini/gemini-2.5-flash";
+const DEFAULT_MODEL = "ag/gemini-3.8-flash-tiered";
 
 // Retry: regenerate the assistant answer for a turn.
 // Body: { messageId } — id of the assistant message to redo, or of the user
@@ -43,8 +44,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
     const model = thread.model || DEFAULT_MODEL;
     const resolvedMode: Mode = thread.mode === "AUTO" ? "ASK" : (thread.mode as Mode);
+    const memory = await getMemoryContext(user.id);
     const xrMessages: XRMsg[] = [
-      { role: "system", content: systemPrompt(resolvedMode) },
+      {
+        role: "system",
+        content: systemPrompt(resolvedMode) + (memory ? `\n\n--- REFERENCE CONTEXT ---\n${memory}` : ""),
+      },
       ...history.map((h) => ({
         role: h.role === "ASSISTANT" ? ("assistant" as const) : ("user" as const),
         content: h.content,

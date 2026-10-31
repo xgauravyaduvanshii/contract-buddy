@@ -1,21 +1,28 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
 import { db } from "./db";
-import { env, isSmtpConfigured } from "./env";
+import { env } from "./env";
+import { getSmtpConfig } from "./settings";
 import { DEFAULT_TEMPLATES, interpolate } from "./email-templates";
 
-let transporter: Transporter | null = null;
-function getTransporter(): Transporter | null {
-  if (!isSmtpConfigured) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: env.smtp.host,
-      port: env.smtp.port,
-      secure: env.smtp.secure,
-      auth: { user: env.smtp.user, pass: env.smtp.pass },
-    });
+let cached: { key: string; t: Transporter } | null = null;
+
+async function getTransporter(): Promise<Transporter | null> {
+  const cfg = await getSmtpConfig();
+  if (!cfg.host || !cfg.user || !cfg.pass) return null;
+  const key = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.user}`;
+  if (!cached || cached.key !== key) {
+    cached = {
+      key,
+      t: nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: { user: cfg.user, pass: cfg.pass },
+      }),
+    };
   }
-  return transporter;
+  return cached.t;
 }
 
 export type SendArgs = {
@@ -57,7 +64,7 @@ export async function sendTemplatedEmail({
     vars,
   );
 
-  const t = getTransporter();
+  const t = await getTransporter();
   if (!t) {
     console.log(
       `\n📧 [dev] Email not sent (SMTP unconfigured) → ${to}\nSubject: ${subject}\n(OTP/vars: ${JSON.stringify(
@@ -67,6 +74,12 @@ export async function sendTemplatedEmail({
     return { delivered: false, reason: "smtp_unconfigured" };
   }
 
-  await t.sendMail({ from: env.smtp.from, to, subject, html, text });
+  const cfg = await getSmtpConfig();
+  try {
+    await t.sendMail({ from: cfg.from, to, subject, html, text });
+  } catch (e) {
+    console.error(`📧 send failed → ${to}:`, (e as Error).message?.slice(0, 200));
+    return { delivered: false, reason: (e as Error).message?.slice(0, 200) || "send failed" };
+  }
   return { delivered: true };
 }

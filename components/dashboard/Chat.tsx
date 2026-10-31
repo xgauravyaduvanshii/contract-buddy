@@ -10,7 +10,7 @@ import { Dropdown, ModeMenu, ModelMenu, type ModelOption } from "./Menus";
 import { MessageRow, type ChatMsg, type ToolCall } from "./MessageList";
 import { type ModeId } from "@/lib/modes-client";
 
-const DEFAULT_MODEL = "gemini/gemini-2.5-flash";
+const DEFAULT_MODEL = "ag/gemini-3.8-flash-tiered";
 
 type Attachment = { id: string; name: string; url: string; kind: string };
 type Project = { id: string; name: string };
