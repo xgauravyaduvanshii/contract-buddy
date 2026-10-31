@@ -11,6 +11,7 @@ import {
   runExpertTeam,
 } from "@/lib/chat-modes";
 import { buildContext } from "@/lib/chat-context";
+import { runTurnMeta } from "@/lib/chat-meta";
 import { getEnabledModels } from "@/lib/settings";
 
 const DEFAULT_MODEL = "gemini/gemini-2.5-flash";
@@ -205,17 +206,32 @@ export async function POST(req: NextRequest) {
     data: { mode: resolvedMode, model, updatedAt: new Date() },
   });
 
+  // ── AI reaction/comment on the user's message + next-message suggestions ─
+  const meta = await runTurnMeta({
+    model: ROUTER_MODEL,
+    question: message,
+    answer: content,
+    userMessageId: userMsg.id,
+  });
+
   return ok({
     threadId: thread.id,
     mode: resolvedMode,
     model,
-    userMessage: { id: userMsg.id, role: "USER", content: message },
+    userMessage: {
+      id: userMsg.id,
+      role: "USER",
+      content: message,
+      reactions: meta.reaction ? [{ by: "AI", emoji: meta.reaction }] : [],
+      comments: meta.comment ? [{ by: "AI", text: meta.comment, at: new Date().toISOString() }] : [],
+    },
     assistantMessage: {
       id: assistantMsg.id,
       role: "ASSISTANT",
       content,
       thinking,
       toolCalls: toolLog,
+      suggestions: meta.suggestions,
     },
   });
 }

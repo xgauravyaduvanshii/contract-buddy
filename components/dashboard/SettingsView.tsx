@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Wand2, Plug, Palette, User as UserIcon, Check, Plus, Trash2 } from "lucide-react";
+import { Wand2, Plug, Palette, User as UserIcon, Check, Plus, Trash2, Archive, Undo2 } from "lucide-react";
 import { apiGet, apiSend } from "@/lib/client";
 
 type User = { id: string; email: string; name: string | null; role: string };
@@ -13,6 +13,7 @@ const TABS = [
   { id: "skills", label: "Skills", icon: Wand2 },
   { id: "plugins", label: "Plugins", icon: Plug },
   { id: "design", label: "Design system", icon: Palette },
+  { id: "chats", label: "Archived chats", icon: Archive },
   { id: "account", label: "Account", icon: UserIcon },
 ] as const;
 
@@ -45,9 +46,73 @@ export function SettingsView({ user }: { user: User }) {
           {tab === "skills" && <SkillsTab />}
           {tab === "plugins" && <PluginsTab />}
           {tab === "design" && <DesignTab />}
+          {tab === "chats" && <ArchivedChatsTab />}
           {tab === "account" && <AccountTab user={user} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ArchivedChatsTab() {
+  type T = { id: string; title: string; updatedAt: string };
+  const [threads, setThreads] = useState<T[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(() => {
+    apiGet<{ threads: T[] }>("/api/threads?archived=1").then((r) => r.ok && r.data && setThreads(r.data.threads));
+  }, []);
+  useEffect(load, [load]);
+
+  async function unarchive(t: T) {
+    setBusy(t.id);
+    await apiSend(`/api/threads/${t.id}`, "PATCH", { archived: false });
+    load();
+    setBusy(null);
+  }
+
+  async function destroy(t: T) {
+    setBusy(t.id);
+    await apiSend(`/api/threads/${t.id}?permanent=1`, "DELETE");
+    load();
+    setBusy(null);
+  }
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-zinc-400">
+        Archived chats live here. Unarchive to bring one back to the sidebar, or delete it for good.
+      </p>
+      {threads.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-10 text-center text-sm text-zinc-500">
+          No archived chats. Archive one from the sidebar hover menu.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {threads.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+              <Archive className="h-4 w-4 shrink-0 text-zinc-500" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-200">{t.title || "Untitled"}</p>
+                <p className="text-xs text-zinc-500">{new Date(t.updatedAt).toLocaleString()}</p>
+              </div>
+              <button
+                onClick={() => unarchive(t)}
+                disabled={busy === t.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-white disabled:opacity-50"
+              >
+                <Undo2 className="h-3 w-3" /> Unarchive
+              </button>
+              <button
+                onClick={() => destroy(t)}
+                disabled={busy === t.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-50"
+              >
+                <Trash2 className="h-3 w-3" /> Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

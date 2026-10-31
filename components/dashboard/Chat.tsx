@@ -42,6 +42,8 @@ export function Chat() {
   const [busy, setBusy] = useState(false);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -67,12 +69,13 @@ export function Chat() {
       // Reset conversation when navigating to a fresh chat (param-driven, intentional)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([]);
+      setSuggestions([]);
       const presetProject = params.get("project");
       setProjectId(presetProject ?? null);
       return;
     }
     setLoadingThread(true);
-    apiGet<{ thread: { mode: ModeId; model: string | null; projectId: string | null; messages: { id: string; role: string; content: string; thinking?: string; toolCalls?: ToolCall[] }[] } }>(
+    apiGet<{ thread: { mode: ModeId; model: string | null; projectId: string | null; messages: { id: string; role: string; content: string; thinking?: string; toolCalls?: ToolCall[]; reactions?: ChatMsg["reactions"]; comments?: ChatMsg["comments"] }[] } }>(
       `/api/threads/${threadId}`,
     )
       .then((r) => {
@@ -81,17 +84,19 @@ export function Chat() {
           setMode(t.mode || "AUTO");
           if (t.model) setModel(t.model);
           setProjectId(t.projectId);
-          setMessages(
-            t.messages
-              .filter((m) => m.role === "USER" || m.role === "ASSISTANT")
-              .map((m) => ({
-                id: m.id,
-                role: m.role as "USER" | "ASSISTANT",
-                content: m.content,
-                thinking: m.thinking,
-                toolCalls: m.toolCalls,
-              })),
-          );
+          const list = t.messages
+            .filter((m) => m.role === "USER" || m.role === "ASSISTANT")
+            .map((m) => ({
+              id: m.id,
+              role: m.role as "USER" | "ASSISTANT",
+              content: m.content,
+              thinking: m.thinking,
+              toolCalls: m.toolCalls,
+              reactions: m.reactions,
+              comments: m.comments,
+            }));
+          setMessages(list);
+          setSuggestions([]);
         }
       })
       .finally(() => setLoadingThread(false));
@@ -136,7 +141,8 @@ export function Chat() {
     const res = await apiSend<{
       threadId: string;
       mode: ModeId;
-      assistantMessage: { id: string; content: string; thinking: string | null; toolCalls: ToolCall[] };
+      userMessage: { id: string; role: "USER"; content: string; reactions?: ChatMsg["reactions"]; comments?: ChatMsg["comments"] };
+      assistantMessage: { id: string; content: string; thinking: string | null; toolCalls: ToolCall[]; suggestions?: string[] };
     }>("/api/chat", "POST", {
       threadId,
       message: text,
@@ -158,7 +164,11 @@ export function Chat() {
     }
 
     setMessages((m) => [
-      ...m,
+      ...m.map((x) =>
+        x.id === tempId
+          ? { ...x, id: res.data!.userMessage.id, reactions: res.data!.userMessage.reactions, comments: res.data!.userMessage.comments }
+          : x,
+      ),
       {
         id: res.data!.assistantMessage.id,
         role: "ASSISTANT",
@@ -168,6 +178,7 @@ export function Chat() {
       },
     ]);
     setMode(res.data.mode);
+    setSuggestions(res.data.assistantMessage.suggestions || []);
     setAttachments([]);
     setWebSearch(false);
     setImageGen(false);
@@ -175,10 +186,50 @@ export function Chat() {
     router.refresh();
   }
 
+  type TurnRes = {
+    userMessage: { id: string; role: "USER"; content: string; reactions?: ChatMsg["reactions"]; comments?: ChatMsg["comments"] };
+    assistantMessage: { id: string; role: "ASSISTANT"; content: string; thinking: string | null; toolCalls: ToolCall[]; suggestions?: string[] };
+  };
+
+  async function retry(messageId: string) {
+    if (!threadId || busy) return;
+    setError(null);
+    setBusy(true);
+    setRetryingId(messageId);
+    const res = await apiSend<TurnRes>(`/api/threads/${threadId}/retry`, "POST", { messageId });
+    setBusy(false);
+    setRetryingId(null);
+    if (!res.ok || !res.data) {
+      setError(res.error || "Retry failed");
+      return;
+    }
+    setMessages((m) => {
+      let idx = m.findIndex((x) => x.id === messageId);
+      if (idx === -1) return m;
+      if (m[idx].role === "ASSISTANT") {
+        while (idx > 0 && m[idx].role !== "USER") idx--;
+      }
+      return [...m.slice(0, idx), res.data!.userMessage, res.data!.assistantMessage];
+    });
+    setSuggestions(res.data.assistantMessage.suggestions || []);
+  }
+
+  async function editMessage(msg: ChatMsg, content: string) {
+    setError(null);
+    const r = await apiSend(`/api/messages/${msg.id}`, "PATCH", { content });
+    if (!r.ok) {
+      setError(r.error || "Could not edit the message");
+      return;
+    }
+    setMessages((m) => m.map((x) => (x.id === msg.id ? { ...x, content } : x)));
+    // Editing a user message re-sends it and regenerates the assistant answer
+    if (msg.role === "USER") await retry(msg.id);
+  }
+
   const hasChat = messages.length > 0 || loadingThread || busy;
 
   const PromptBox = (
-    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/85 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/85 px-3 pb-2 pt-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
       <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPickFiles(e.target.files)} />
 
       {(attachments.length > 0 || projectId || designSystemId || skillIds.length || webSearch || imageGen) && (
@@ -215,10 +266,10 @@ export function Chat() {
         }}
         rows={1}
         placeholder="Describe your project or ask anything — e.g. “Draft a contract for a 6-week website rebuild with a client in Germany.”"
-        className="max-h-[200px] w-full resize-none overflow-y-auto scrollbar-none bg-transparent px-1 py-1.5 text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500"
+        className="max-h-[220px] w-full resize-none overflow-y-auto scrollbar-none bg-transparent px-1 pb-6 pt-1.5 text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500"
       />
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5">
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <ModeMenu value={mode} onChange={setMode} />
           <ModelMenu models={models} value={model} onChange={setModel} />
@@ -291,9 +342,32 @@ export function Chat() {
               {loadingThread ? (
                 <p className="text-center text-sm text-zinc-500">Loading conversation…</p>
               ) : (
-                messages.map((m) => <MessageRow key={m.id} msg={m} />)
+                messages.map((m) => (
+                  <MessageRow key={m.id} msg={m} threadId={threadId} onRetry={retry} onEdit={editMessage} retrying={retryingId === m.id} />
+                ))
               )}
               {busy && <TypingRow />}
+              {!busy && suggestions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <p className="w-full text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                    Suggested next
+                  </p>
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setInput(s);
+                        requestAnimationFrame(autoGrow);
+                        taRef.current?.focus();
+                      }}
+                      className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-brand-500/50 hover:text-white"
+                      title="Predicted next message — click to use"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div ref={bottomRef} />
             </div>
           </div>
