@@ -69,6 +69,34 @@ body {
   background-size: 14px 14px;
 }
 
+/* Scrollbar utilities */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slim, rounded scrollbar for menus and panels — subtle, not the native bar */
+.scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70 / 0.8) transparent;
+}
+.scrollbar-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70 / 0.8);
+  border-radius: 9999px;
+}
+.scrollbar-slim::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 53 60 / 0.9);
+}
+
 /* Subtle animated gradient blob used behind the hero */
 @keyframes floatSlow {
   0%,

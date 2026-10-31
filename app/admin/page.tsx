@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/auth";
 import { AdminApp } from "@/components/admin/AdminApp";
 
 export const metadata = { title: "Admin", robots: { index: false } };
+// Reads the session cookie (uncached) — allow a blocking route instead of prerendering
+export const instant = false;
 
 export default async function AdminPage() {
   const user = await getSessionUser();

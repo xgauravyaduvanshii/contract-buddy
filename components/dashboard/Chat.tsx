@@ -215,11 +215,11 @@ export function Chat() {
         }}
         rows={1}
         placeholder="Describe your project or ask anything — e.g. “Draft a contract for a 6-week website rebuild with a client in Germany.”"
-        className="max-h-[200px] w-full resize-none bg-transparent px-1 py-1.5 text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500"
+        className="max-h-[200px] w-full resize-none overflow-y-auto scrollbar-none bg-transparent px-1 py-1.5 text-[15px] text-zinc-100 outline-none placeholder:text-zinc-500"
       />
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <ModeMenu value={mode} onChange={setMode} />
           <ModelMenu models={models} value={model} onChange={setModel} />
           <PlusMenu
@@ -240,9 +240,9 @@ export function Chat() {
         <button
           onClick={send}
           disabled={busy || !input.trim()}
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-brand-600 px-5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand-600 px-4 text-xs font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           Send
         </button>
       </div>
@@ -286,7 +286,7 @@ export function Chat() {
         </div>
       ) : (
         <>
-          <div className="flex-1 space-y-6 overflow-y-auto px-5 py-6 sm:px-8">
+          <div className="flex-1 space-y-6 overflow-y-auto scrollbar-slim px-5 py-6 sm:px-8">
             <div className="mx-auto max-w-3xl space-y-6">
               {loadingThread ? (
                 <p className="text-center text-sm text-zinc-500">Loading conversation…</p>
@@ -372,13 +372,13 @@ function PlusMenu(props: {
   return (
     <Dropdown
       trigger={({ toggle }) => (
-        <button onClick={toggle} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800/60 text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800">
-          <Plus className="h-4 w-4" />
+        <button onClick={toggle} className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800/60 text-zinc-200 transition hover:border-zinc-600 hover:bg-zinc-800">
+          <Plus className="h-3.5 w-3.5" />
         </button>
       )}
     >
       {() => (
-        <div className="max-h-96 space-y-1 overflow-y-auto">
+        <div className="max-h-[min(46vh,320px)] space-y-1 overflow-y-auto scrollbar-slim pr-1">
           <Item icon={<Paperclip className="h-4 w-4" />} title="Upload or add files" sub="Attach documents & images to the chat" onClick={props.onUpload} />
 
           <Section title="Add to project">
@@ -421,7 +421,7 @@ function PlusMenu(props: {
           <Section title="Plugins">
             {props.plugins.length ? (
               props.plugins.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-zinc-300">
+                <div key={p.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1 text-xs text-zinc-300">
                   <Plug className="h-3.5 w-3.5 text-brand-400" /> {p.name}
                   <span className="ml-auto text-[10px] text-zinc-500">available</span>
                 </div>
@@ -455,12 +455,12 @@ function Item({ icon, title, sub, onClick, active }: { icon: React.ReactNode; ti
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-zinc-800 ${active ? "bg-brand-500/10" : ""}`}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left transition hover:bg-zinc-800 ${active ? "bg-brand-500/10" : ""}`}
     >
-      <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${active ? "bg-brand-600/20 text-brand-300" : "bg-zinc-800 text-zinc-300"}`}>{icon}</span>
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${active ? "bg-brand-600/20 text-brand-300" : "bg-zinc-800 text-zinc-300"}`}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-zinc-100">{title}</span>
-        {sub && <span className="block text-xs text-zinc-500">{sub}</span>}
+        <span className="block text-xs font-medium text-zinc-100">{title}</span>
+        {sub && <span className="block text-[11px] leading-snug text-zinc-500">{sub}</span>}
       </span>
       {active && <span className="h-2 w-2 rounded-full bg-brand-400" />}
     </button>
@@ -470,7 +470,7 @@ function Item({ icon, title, sub, onClick, active }: { icon: React.ReactNode; ti
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{title}</p>
+      <p className="px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{title}</p>
       <div className="space-y-0.5">{children}</div>
     </div>
   );
@@ -478,7 +478,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Sub({ children, onClick }: { children: React.ReactNode; onClick: () => void; active?: boolean }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-zinc-300 transition hover:bg-zinc-800">
+    <button onClick={onClick} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1 text-left text-xs text-zinc-300 transition hover:bg-zinc-800">
       {children}
     </button>
   );
