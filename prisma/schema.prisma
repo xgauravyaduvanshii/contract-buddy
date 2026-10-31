@@ -1,0 +1,327 @@
+// ContractBuddy — Prisma schema
+// Datasource: PostgreSQL (database: contractbuddy)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────
+enum Role {
+  USER
+  ADMIN
+}
+
+enum AuthProvider {
+  CREDENTIALS
+  GOOGLE
+  GITHUB
+}
+
+enum OtpPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFY
+}
+
+enum NoticeKind {
+  WELCOME
+  UPDATE
+  INFO
+  MAINTENANCE
+}
+
+enum ThreadMode {
+  ASK
+  PLAN
+  AGENT
+  EXPERT
+  AUTO
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum AttachmentKind {
+  FILE
+  IMAGE
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  VIEWED
+  SIGNED
+  VOID
+}
+
+enum NotificationType {
+  SYSTEM
+  PROJECT
+  CONTRACT
+  AUTH
+  BILLING
+  NOTICE
+}
+
+// ── Auth & users ─────────────────────────────────────────────
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  name          String?
+  image         String?
+  passwordHash  String?
+  role          Role          @default(USER)
+  provider      AuthProvider  @default(CREDENTIALS)
+  emailVerified Boolean       @default(false)
+  suspended     Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  otpTokens     OtpToken[]
+  projects      Project[]
+  attachments   Attachment[]
+  contracts     Contract[]
+  threads       ChatThread[]
+  messages      ChatMessage[]
+  notifications Notification[]
+  skills        UserSkill[]
+  designSystems DesignSystem[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  provider          AuthProvider
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  scope             String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model OtpToken {
+  id        String     @id @default(cuid())
+  userId    String
+  email     String
+  codeHash  String
+  purpose   OtpPurpose
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, purpose])
+  @@index([userId])
+}
+
+// ── Projects, files, contracts ───────────────────────────────
+model Project {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  goal      String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+  contracts   Contract[]
+  threads     ChatThread[]
+
+  @@index([userId])
+}
+
+model Attachment {
+  id        String           @id @default(cuid())
+  userId    String
+  projectId String?
+  kind      AttachmentKind   @default(FILE)
+  name      String
+  url       String
+  mimeType  String?
+  size      Int?
+  createdAt DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Contract {
+  id        String         @id @default(cuid())
+  userId    String
+  projectId String?
+  title     String
+  client    String?
+  body      Json?
+  status    ContractStatus @default(DRAFT)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── Chat ─────────────────────────────────────────────────────
+model ChatThread {
+  id        String     @id @default(cuid())
+  userId    String
+  projectId String?
+  title     String     @default("New chat")
+  mode      ThreadMode @default(AUTO)
+  model     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  threadId  String
+  userId    String
+  role      MessageRole
+  content   String
+  mode      ThreadMode?
+  thinking  String?
+  toolCalls Json?
+  createdAt DateTime    @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+}
+
+// ── Notifications & notices ──────────────────────────────────
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  body      String?
+  type      NotificationType @default(SYSTEM)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+model Notice {
+  id          String     @id @default(cuid())
+  title       String
+  body        String
+  kind        NoticeKind @default(INFO)
+  active      Boolean    @default(false)
+  publishedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([active])
+}
+
+// ── Email templates ──────────────────────────────────────────
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  subject   String
+  html      String
+  text      String?
+  updatedAt DateTime @updatedAt
+}
+
+// ── Skills, plugins, design systems ──────────────────────────
+model Skill {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  category    String   @default("general")
+  instructions String?
+  enabled     Boolean  @default(true)
+  global      Boolean  @default(true)
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  installs UserSkill[]
+
+  @@index([enabled])
+}
+
+model UserSkill {
+  id       String   @id @default(cuid())
+  userId   String
+  skillId  String
+  installedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+}
+
+model Plugin {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String?
+  enabled     Boolean @default(true)
+  config      Json?
+  createdAt   DateTime @default(now())
+}
+
+model DesignSystem {
+  id        String   @id @default(cuid())
+  userId    String?
+  name      String
+  tokens    Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ── App settings (key/value; admin-managed API key, model toggles) ─
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
