@@ -32,6 +32,12 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.template
+
+# private notes / logs (never commit — contain API keys)
+/urmate.md
+/dev.log
+*.log
 
 # vercel
 .vercel
