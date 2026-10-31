@@ -88,6 +88,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       answer: result.content,
       userMessageId: msgs[qIdx].id,
     });
+    if (meta.suggestions.length) {
+      await db.chatMessage.update({ where: { id: assistantMsg.id }, data: { suggestions: meta.suggestions } });
+    }
 
     return ok({
       userMessage: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Brain, ChevronRight, Sparkles, Wrench, RotateCcw, Pencil, Languages, SmilePlus, MessageCircle, Check, Loader2,
 } from "lucide-react";
@@ -172,20 +172,64 @@ function Pop({
   );
 }
 
+function ReactionPills({
+  reactions,
+  onToggle,
+  reacting,
+}: {
+  reactions: Reaction[];
+  onToggle: (emoji: string) => void;
+  reacting?: boolean;
+}) {
+  if (!reactions.length) return null;
+  const counts = reactions.reduce<Record<string, { n: number; mine: boolean }>>((acc, x) => {
+    acc[x.emoji] = { n: (acc[x.emoji]?.n || 0) + 1, mine: (acc[x.emoji]?.mine || false) || x.by === "USER" };
+    return acc;
+  }, {});
+  return (
+    <div className="flex flex-wrap gap-1">
+      {Object.entries(counts).map(([emoji, c]) => (
+        <button
+          key={emoji}
+          onClick={() => onToggle(emoji)}
+          disabled={reacting}
+          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs shadow-lg transition ${
+            c.mine
+              ? "border-brand-400/70 bg-brand-600 text-white"
+              : "border-zinc-600/80 bg-zinc-900 text-zinc-200 hover:border-zinc-500"
+          }`}
+          title={reactions.filter((x) => x.emoji === emoji).map((x) => (x.by === "USER" ? "You" : "AI")).join(", ")}
+        >
+          {emoji} <span className={c.mine ? "text-white/80" : "text-zinc-400"}>{c.n}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ActionsBar({
   msg,
   threadId,
   onRetry,
   onEdit,
   retrying,
+  comments,
+  onComment,
+  commenting,
+  onReact,
+  reacting,
 }: {
   msg: ChatMsg;
   threadId: string | null;
   onRetry?: (id: string) => void;
   onEdit?: (msg: ChatMsg, content: string) => void;
   retrying?: boolean;
+  comments: MsgComment[];
+  onComment: (text: string) => void;
+  commenting?: boolean;
+  onReact: (emoji: string) => void;
+  reacting?: boolean;
 }) {
-  const [emojiOpen, setEmojiOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -193,27 +237,12 @@ function ActionsBar({
   const [comment, setComment] = useState("");
   const [translation, setTranslation] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [reactions, setReactions] = useState<Reaction[]>(Array.isArray(msg.reactions) ? msg.reactions : []);
-  const [comments, setComments] = useState<MsgComment[]>(Array.isArray(msg.comments) ? msg.comments : []);
 
-  async function react(emoji: string) {
-    setEmojiOpen(false);
-    setBusy(true);
-    const r = await apiSend<{ reactions: Reaction[] }>(`/api/messages/${msg.id}/react`, "POST", { emoji });
-    if (r.ok && r.data && Array.isArray(r.data.reactions)) setReactions(r.data.reactions);
-    setBusy(false);
-  }
-
-  async function sendComment() {
+  function sendComment() {
     const text = comment.trim();
     if (!text) return;
-    setBusy(true);
-    const r = await apiSend<{ comments: MsgComment[] }>(`/api/messages/${msg.id}/comment`, "POST", { text });
-    if (r.ok && r.data && Array.isArray(r.data.comments)) setComments(r.data.comments);
+    onComment(text);
     setComment("");
-    setCommentOpen(false);
-    setBusy(false);
   }
 
   async function translate(lang: string) {
@@ -224,10 +253,9 @@ function ActionsBar({
     if (r.ok && r.data) setTranslation(r.data.translation);
   }
 
-  const counts = reactions.reduce<Record<string, { n: number; mine: boolean }>>((acc, x) => {
-    acc[x.emoji] = { n: (acc[x.emoji]?.n || 0) + 1, mine: (acc[x.emoji]?.mine || false) || x.by === "USER" };
-    return acc;
-  }, {});
+  function openComment() {
+    setCommentOpen((o) => !o);
+  }
 
   if (editing) {
     return (
@@ -249,7 +277,7 @@ function ActionsBar({
               setEditing(false);
               if (c && c !== msg.content) onEdit?.(msg, c);
             }}
-            disabled={!draft.trim() || busy}
+            disabled={!draft.trim()}
             className="inline-flex items-center gap-1 rounded-full bg-brand-600 px-3 py-1 text-xs font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
             <Check className="h-3 w-3" /> Save &amp; send
@@ -261,23 +289,6 @@ function ActionsBar({
 
   return (
     <div className="mt-1.5">
-      {reactions.length > 0 && (
-        <div className="mb-1 flex flex-wrap gap-1">
-          {Object.entries(counts).map(([emoji, c]) => (
-            <button
-              key={emoji}
-              onClick={() => react(emoji)}
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
-                c.mine ? "border-brand-500/50 bg-brand-500/10" : "border-zinc-700 bg-zinc-800/60 hover:border-zinc-600"
-              }`}
-              title={reactions.filter((x) => x.emoji === emoji).map((x) => (x.by === "USER" ? "You" : "AI")).join(", ")}
-            >
-              {emoji} <span className="text-zinc-400">{c.n}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="flex items-center gap-0.5 text-zinc-500">
         {onRetry && threadId && (
           <button onClick={() => onRetry(msg.id)} disabled={retrying} title="Retry — generate again" className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-60">
@@ -307,36 +318,39 @@ function ActionsBar({
           </Pop>
         </div>
         <div className="relative">
-          <button onClick={() => setEmojiOpen((o) => !o)} title="React" className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition hover:bg-zinc-800 hover:text-zinc-200">
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <SmilePlus className="h-3 w-3" />} React
-          </button>
-          <Pop open={emojiOpen} onClose={() => setEmojiOpen(false)}>
-            <div className="flex gap-1">
-              {EMOJIS.map((e) => (
-                <button key={e} onClick={() => react(e)} className="flex h-8 w-8 items-center justify-center rounded-lg text-base hover:bg-zinc-800">
-                  {e}
-                </button>
-              ))}
-            </div>
-          </Pop>
+          <EmojiReactButton onReact={onReact} busy={reacting} />
         </div>
         <div className="relative">
-          <button onClick={() => setCommentOpen((o) => !o)} title="Comment on this message" className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition hover:bg-zinc-800 hover:text-zinc-200">
+          <button onClick={openComment} title="Comment on this message" className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition hover:bg-zinc-800 hover:text-zinc-200">
             <MessageCircle className="h-3 w-3" /> Comment{comments.length ? ` (${comments.length})` : ""}
           </button>
           <Pop open={commentOpen} onClose={() => setCommentOpen(false)} align="right">
-            <div className="flex w-56 items-center gap-1.5">
-              <input
-                autoFocus
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendComment()}
-                placeholder="Add a comment…"
-                className="h-7 min-w-0 flex-1 rounded-lg bg-zinc-950 px-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
-              />
-              <button onClick={sendComment} className="rounded-md bg-brand-600 px-2 py-1 text-xs text-white hover:bg-brand-700">
-                Post
-              </button>
+            <div className="w-64">
+              {comments.length > 0 && (
+                <div className="max-h-44 space-y-1.5 overflow-y-auto scrollbar-slim px-1.5 pb-1.5 pt-1">
+                  {comments.map((c, i) => (
+                    <p key={i} className="text-xs leading-snug text-zinc-400">
+                      <span className={c.by === "AI" ? "font-medium text-brand-400" : "font-medium text-zinc-200"}>
+                        {c.by === "AI" ? "✳️ AI" : "You"}
+                      </span>{" "}
+                      {c.text}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 border-t border-zinc-800 p-1.5">
+                <input
+                  autoFocus
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendComment()}
+                  placeholder="Add a comment…"
+                  className="h-7 min-w-0 flex-1 rounded-lg bg-zinc-950 px-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+                />
+                <button onClick={sendComment} disabled={commenting || !comment.trim()} className="rounded-md bg-brand-600 px-2 py-1 text-xs text-white hover:bg-brand-700 disabled:opacity-50">
+                  {commenting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Post"}
+                </button>
+              </div>
             </div>
           </Pop>
         </div>
@@ -358,20 +372,32 @@ function ActionsBar({
           <Markdown content={translation} />
         </div>
       )}
+    </div>
+  );
+}
 
-      {comments.length > 0 && (
-        <div className="mt-1.5 space-y-1 border-l-2 border-zinc-800 pl-2.5">
-          {comments.map((c, i) => (
-            <p key={i} className="text-xs text-zinc-400">
-              <span className={c.by === "AI" ? "font-medium text-brand-400" : "font-medium text-zinc-300"}>
-                {c.by === "AI" ? "✳️ AI" : "You"}
-              </span>{" "}
-              {c.text}
-            </p>
+// React button + emoji popover (posts through the row's shared react handler)
+function EmojiReactButton({ onReact, busy }: { onReact: (emoji: string) => void; busy?: boolean }) {
+  const [open, setOpen] = useState(false);
+  function react(emoji: string) {
+    setOpen(false);
+    onReact(emoji);
+  }
+  return (
+    <>
+      <button onClick={() => setOpen((o) => !o)} title="React" className="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] transition hover:bg-zinc-800 hover:text-zinc-200">
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <SmilePlus className="h-3 w-3" />} React
+      </button>
+      <Pop open={open} onClose={() => setOpen(false)}>
+        <div className="flex gap-1">
+          {EMOJIS.map((e) => (
+            <button key={e} onClick={() => react(e)} className="flex h-8 w-8 items-center justify-center rounded-lg text-base hover:bg-zinc-800">
+              {e}
+            </button>
           ))}
         </div>
-      )}
-    </div>
+      </Pop>
+    </>
   );
 }
 
@@ -388,13 +414,54 @@ export function MessageRow({
   onEdit?: (msg: ChatMsg, content: string) => void;
   retrying?: boolean;
 }) {
+  const [reactions, setReactions] = useState<Reaction[]>(Array.isArray(msg.reactions) ? msg.reactions : []);
+  const [comments, setComments] = useState<MsgComment[]>(Array.isArray(msg.comments) ? msg.comments : []);
+  const [commenting, setCommenting] = useState(false);
+  const [reacting, setReacting] = useState(false);
+
+  async function react(emoji: string) {
+    setReacting(true);
+    const r = await apiSend<{ reactions: Reaction[] }>(`/api/messages/${msg.id}/react`, "POST", { emoji });
+    if (r.ok && r.data && Array.isArray(r.data.reactions)) setReactions(r.data.reactions);
+    setReacting(false);
+  }
+
+  const postComment = useCallback(
+    async (text: string) => {
+      setCommenting(true);
+      const r = await apiSend<{ comments: MsgComment[] }>(`/api/messages/${msg.id}/comment`, "POST", { text });
+      if (r.ok && r.data && Array.isArray(r.data.comments)) setComments(r.data.comments);
+      setCommenting(false);
+    },
+    [msg.id],
+  );
+
   if (msg.role === "USER") {
     return (
       <div className="flex flex-col items-end">
-        <div className="max-w-[85%] rounded-3xl rounded-br-lg bg-brand-600 px-4 py-2.5 text-[15px] text-white shadow-lg shadow-brand-600/20">
-          <p className="whitespace-pre-line">{msg.content}</p>
+        <div className="relative max-w-[85%]">
+          <div className="rounded-3xl rounded-br-lg bg-brand-600 px-4 py-2.5 text-[15px] text-white shadow-lg shadow-brand-600/20">
+            <p className="whitespace-pre-line">{msg.content}</p>
+          </div>
+          {/* Reactions sit on the bubble corner, Facebook-style */}
+          {reactions.length > 0 && (
+            <div className="absolute -bottom-3 left-2 z-10">
+              <ReactionPills reactions={reactions} onToggle={react} reacting={reacting} />
+            </div>
+          )}
         </div>
-        <ActionsBar msg={msg} threadId={threadId} onRetry={onRetry} onEdit={onEdit} retrying={retrying} />
+        <ActionsBar
+          msg={msg}
+          threadId={threadId}
+          onRetry={onRetry}
+          onEdit={onEdit}
+          retrying={retrying}
+          comments={comments}
+          onComment={postComment}
+          commenting={commenting}
+          onReact={react}
+          reacting={reacting}
+        />
       </div>
     );
   }
@@ -420,7 +487,23 @@ export function MessageRow({
           </div>
         )}
         <Markdown content={msg.content} />
-        <ActionsBar msg={msg} threadId={threadId} onRetry={onRetry} onEdit={onEdit} retrying={retrying} />
+        {reactions.length > 0 && (
+          <div className="mt-1.5">
+            <ReactionPills reactions={reactions} onToggle={react} reacting={reacting} />
+          </div>
+        )}
+        <ActionsBar
+          msg={msg}
+          threadId={threadId}
+          onRetry={onRetry}
+          onEdit={onEdit}
+          retrying={retrying}
+          comments={comments}
+          onComment={postComment}
+          commenting={commenting}
+          onReact={react}
+          reacting={reacting}
+        />
       </div>
     </div>
   );

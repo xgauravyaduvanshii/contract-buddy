@@ -75,7 +75,7 @@ export function Chat() {
       return;
     }
     setLoadingThread(true);
-    apiGet<{ thread: { mode: ModeId; model: string | null; projectId: string | null; messages: { id: string; role: string; content: string; thinking?: string; toolCalls?: ToolCall[]; reactions?: ChatMsg["reactions"]; comments?: ChatMsg["comments"] }[] } }>(
+    apiGet<{ thread: { mode: ModeId; model: string | null; projectId: string | null; messages: { id: string; role: string; content: string; thinking?: string; toolCalls?: ToolCall[]; reactions?: ChatMsg["reactions"]; comments?: ChatMsg["comments"]; suggestions?: ChatMsg["suggestions"] }[] } }>(
       `/api/threads/${threadId}`,
     )
       .then((r) => {
@@ -94,9 +94,12 @@ export function Chat() {
               toolCalls: m.toolCalls,
               reactions: m.reactions,
               comments: m.comments,
+              suggestions: m.suggestions,
             }));
           setMessages(list);
-          setSuggestions([]);
+          // Keep the last assistant turn's suggestions visible across refreshes
+          const last = [...list].reverse().find((m) => m.role === "ASSISTANT");
+          setSuggestions(Array.isArray(last?.suggestions) ? (last!.suggestions as string[]) : []);
         }
       })
       .finally(() => setLoadingThread(false));
@@ -175,6 +178,7 @@ export function Chat() {
         content: res.data!.assistantMessage.content,
         thinking: res.data!.assistantMessage.thinking,
         toolCalls: res.data!.assistantMessage.toolCalls,
+        suggestions: res.data!.assistantMessage.suggestions,
       },
     ]);
     setMode(res.data.mode);

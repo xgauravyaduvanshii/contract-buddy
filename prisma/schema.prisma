@@ -229,8 +229,9 @@ model ChatMessage {
   mode      ThreadMode?
   thinking  String?
   toolCalls Json?
-  reactions Json?
-  comments  Json?
+  reactions   Json?
+  comments    Json?
+  suggestions Json?
   createdAt DateTime    @default(now())
 
   thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)

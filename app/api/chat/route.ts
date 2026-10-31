@@ -216,6 +216,9 @@ export async function POST(req: NextRequest) {
     answer: content,
     userMessageId: userMsg.id,
   });
+  if (meta.suggestions.length) {
+    await db.chatMessage.update({ where: { id: assistantMsg.id }, data: { suggestions: meta.suggestions } });
+  }
 
   // ── Auto memory extraction from this turn (respects the user's toggle) ─
   await autoMemorize({ userId: user.id, question: message, answer: content });
