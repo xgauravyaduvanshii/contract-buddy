@@ -178,7 +178,7 @@ export function Chat() {
   const hasChat = messages.length > 0 || loadingThread || busy;
 
   const PromptBox = (
-    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-3 shadow-xl backdrop-blur">
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/85 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
       <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPickFiles(e.target.files)} />
 
       {(attachments.length > 0 || projectId || designSystemId || skillIds.length || webSearch || imageGen) && (
@@ -285,8 +285,8 @@ export function Chat() {
           </div>
         </div>
       ) : (
-        <>
-          <div className="flex-1 space-y-6 overflow-y-auto scrollbar-slim px-5 py-6 sm:px-8">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-6 overflow-y-auto scrollbar-slim px-5 py-6 pb-44 sm:px-8">
             <div className="mx-auto max-w-3xl space-y-6">
               {loadingThread ? (
                 <p className="text-center text-sm text-zinc-500">Loading conversation…</p>
@@ -297,11 +297,14 @@ export function Chat() {
               <div ref={bottomRef} />
             </div>
           </div>
-          <div className="border-t border-zinc-800 bg-zinc-950/40 px-5 py-4 sm:px-8">
-            {error && <ErrorBar msg={error} />}
-            <div className="mx-auto max-w-3xl">{PromptBox}</div>
+          {/* Floating chat input pinned over the bottom of the rounded main panel */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-4 sm:px-8">
+            <div className="pointer-events-auto mx-auto w-full max-w-3xl">
+              {error && <ErrorBar msg={error} />}
+              {PromptBox}
+            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

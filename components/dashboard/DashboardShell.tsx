@@ -8,12 +8,12 @@ type User = { id: string; email: string; name: string | null; role: string; imag
 
 export function DashboardShell({ user, children }: { user: User; children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-background p-4 text-foreground">
+    <div className="h-screen overflow-hidden bg-background p-4 text-foreground">
       <NoticePanel />
-      <div className="mx-auto flex max-w-[1500px] gap-4">
+      <div className="mx-auto flex h-full max-w-[1500px] gap-4">
         <Sidebar user={user} />
         <main className="min-w-0 flex-1">
-          <div className="flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/40">
+          <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/40">
             {children}
           </div>
         </main>
